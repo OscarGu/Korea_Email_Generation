@@ -1,6 +1,7 @@
 import streamlit as st
 from langchain import PromptTemplate
 from langchain.llms import OpenAI
+import openai
 
 #   You're working as a professional business man who is doing business with Korean and you're communicating with your Korean business partner via email in Korean language.
 #     - Provide your output to Korean language
@@ -16,13 +17,15 @@ template = """
     - Formal: We went to Barcelona for the weekend. We have a lot of things to tell you.
     - Informal: Went to Barcelona for the weekend. Lots to tell you.  
 
-    Please start the email with a warm introduction. Add the introduction if you need to.
+    Please start the email with a warm introduction. Add the introduction if you need to. Don't provide any additional information in your response.
     
     Below is the tone, email:
     TONE: {tone}
-    EMAIL: {email}
+    EMAIL: {email}  
         
-    YOUR RESPONSE in the same language as in the input email:
+    Your response should be in the same language as in the input email.
+
+    YOUR RESPONSE:
 """
 
 prompt = PromptTemplate(
@@ -56,6 +59,7 @@ def get_api_key():
     return input_text
 
 openai_api_key = get_api_key()
+openai.api_key = openai_api_key
 
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -96,16 +100,38 @@ if email_input:
         st.warning('Please insert OpenAI API Key. Instructions [here](https://help.openai.com/en/articles/4936850-where-do-i-find-my-secret-api-key)', icon="⚠️")
         st.stop()
 
-    llm = load_LLM(openai_api_key=openai_api_key)
-
     prompt_with_email = prompt.format(tone=option_tone, email=email_input)
+    report = []
+    res_box = st.empty()
 
-    formatted_email = llm(prompt_with_email)
+    result = ""
+    
+    for resp in openai.Completion.create(model='text-davinci-003',
+                                    prompt=prompt_with_email,
+                                    max_tokens=120, 
+                                    temperature = 0.5,
+                                    stream = True,):
+            # join method to concatenate the elements of the list 
+            # into a single string, 
+            # then strip out any empty strings
+            report.append(resp.choices[0].text)
+            result = "".join(report).strip()
+            result = result.replace("\n", "")        
+            res_box.markdown(f'*{result}*') 
 
-    st.write(formatted_email)
+    st.write("韩语翻译:")
+    res_box_korea = st.empty()
 
-    st.markdown("### 韩语版本:")
-    llm = load_LLM(openai_api_key=openai_api_key)
-    llm.temperature = 0
-    korean_lang_content = llm("translate the below content into Korean language. Just provide the translated result and don't provide me any additional content. \n" + formatted_email)
-    st.write(korean_lang_content)
+    report = []
+    for resp in openai.Completion.create(model='text-davinci-003',
+                                    prompt="translate the content into Korean language:" + result + "\n. Only provide the result and do not provide any additional content.",
+                                    max_tokens=120, 
+                                    temperature = 0,
+                                    stream = True,):
+            # join method to concatenate the elements of the list 
+            # into a single string, 
+            # then strip out any empty strings
+            report.append(resp.choices[0].text)
+            result_korea = "".join(report).strip()
+            result_korea = result_korea.replace("\n", "")        
+            res_box_korea.markdown(f'*{result_korea}*') 
